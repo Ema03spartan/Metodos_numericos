@@ -55,7 +55,7 @@ h1 span { color: var(--accent); }
 .menu-btn:hover { border-color: var(--accent); transform: translateY(-2px); }
 .menu-btn.active { border-color: var(--accent); background: #0e1f1a; }
 .menu-btn .icon { font-size: 1.6rem; margin-bottom: 8px; }
-.menu-btn .name { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
+.menu-btn .name { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; color: var(--text); }
 .menu-btn .desc { font-size: 0.78rem; color: var(--muted); font-family: 'Space Mono', monospace; line-height: 1.5; }
 
 /* ── FORMULARIO ── */
