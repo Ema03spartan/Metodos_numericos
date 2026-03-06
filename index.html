@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Métodos Numéricos</title>
+
+  <!-- Librería para evaluar ecuaciones escritas como texto -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
+
+  <!-- Archivo de estilos separado -->
+  <link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<div class="container">
+
+  <h1>Métodos <span>Numéricos</span></h1>
+  <p class="subtitle">// bisección &amp; newton-raphson</p>
+
+  <!-- ── MENÚ DE SELECCIÓN ── -->
+  <div class="menu">
+    <button class="menu-btn active" onclick="selectMethod('biseccion')" id="btn-biseccion">
+      <div class="icon">🔀</div>
+      <div class="name">Bisección</div>
+      <div class="desc">Divide el intervalo [a, b] a la mitad en cada iteración hasta encontrar la raíz.</div>
+    </button>
+    <button class="menu-btn" onclick="selectMethod('newton')" id="btn-newton">
+      <div class="icon">📐</div>
+      <div class="name">Newton-Raphson</div>
+      <div class="desc">Usa la derivada para aproximarse rápidamente a la raíz desde un punto x₀.</div>
+    </button>
+  </div>
+
+  <!-- ── FORMULARIO DE CONFIGURACIÓN ── -->
+  <div class="form-card">
+    <div class="form-title" id="form-title">⚙ Configurar — Bisección</div>
+    <div class="fields">
+
+      <div>
+        <label>Ecuación f(x)</label>
+        <input id="ecuacion" type="text" placeholder="x^3 - x - 2" value="x^3 - x - 2">
+        <p class="hint">Usa <span>x</span> como variable. Ej: <span>sin(x) - x/2</span>, <span>x^2 - 4</span>, <span>e^x - 3</span></p>
+      </div>
+
+      <!-- Campos exclusivos de Bisección -->
+      <div id="campos-biseccion" class="row">
+        <div>
+          <label>Punto a (inicio del intervalo)</label>
+          <input id="param-a" type="number" step="any" value="1">
+        </div>
+        <div>
+          <label>Punto b (fin del intervalo)</label>
+          <input id="param-b" type="number" step="any" value="2">
+        </div>
+      </div>
+
+      <!-- Campo exclusivo de Newton-Raphson -->
+      <div id="campos-newton" style="display:none">
+        <label>Punto inicial x₀</label>
+        <input id="param-x0" type="number" step="any" value="1.5">
+      </div>
+
+      <div>
+        <label>Número de iteraciones</label>
+        <input id="iteraciones" type="number" min="1" max="100" value="10">
+      </div>
+
+      <button class="run-btn" onclick="calcular()">▶ Calcular</button>
+    </div>
+  </div>
+
+  <!-- ── MENSAJE DE ERROR ── -->
+  <div class="error-box" id="error-box"></div>
+
+  <!-- ── SECCIÓN DE RESULTADOS ── -->
+  <div class="results" id="results">
+    <div class="result-header">
+      <div class="result-title" id="result-title">Resultados</div>
+      <div class="badge" id="result-badge">—</div>
+    </div>
+
+    <!-- Tarjetas de resumen -->
+    <div class="summary-cards">
+      <div class="s-card">
+        <div class="val" id="s-raiz">—</div>
+        <div class="lbl">Raíz aproximada</div>
+      </div>
+      <div class="s-card">
+        <div class="val" id="s-fval">—</div>
+        <div class="lbl">f(raíz)</div>
+      </div>
+      <div class="s-card">
+        <div class="val" id="s-iter">—</div>
+        <div class="lbl">Iteraciones</div>
+      </div>
+    </div>
+
+    <!-- Tabla de iteraciones -->
+    <div class="table-wrap">
+      <table>
+        <thead id="tabla-head"></thead>
+        <tbody id="tabla-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+// ─────────────────────────────────────────────────────────
+//  VARIABLE GLOBAL
+//  Guarda qué método está seleccionado en este momento
+// ─────────────────────────────────────────────────────────
+let metodo = 'biseccion';
+
+
+// ─────────────────────────────────────────────────────────
+//  selectMethod(m)
+//  Se llama al hacer clic en uno de los dos botones del menú.
+//  Cambia el método activo y muestra/oculta los campos correctos.
+// ─────────────────────────────────────────────────────────
+function selectMethod(m) {
+  metodo = m;
+
+  // Marcar botón activo y desmarcar el otro
+  document.getElementById('btn-biseccion').classList.toggle('active', m === 'biseccion');
+  document.getElementById('btn-newton').classList.toggle('active', m === 'newton');
+
+  // Mostrar los campos del método elegido y ocultar los del otro
+  document.getElementById('campos-biseccion').style.display = m === 'biseccion' ? 'grid' : 'none';
+  document.getElementById('campos-newton').style.display   = m === 'newton'    ? 'block' : 'none';
+
+  // Actualizar el título del formulario
+  document.getElementById('form-title').textContent = m === 'biseccion'
+    ? '⚙ Configurar — Bisección'
+    : '⚙ Configurar — Newton-Raphson';
+
+  // Limpiar resultados y errores anteriores
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('error-box').style.display = 'none';
+}
+
+
+// ─────────────────────────────────────────────────────────
+//  evalF(expr, x)
+//  Usa math.js para evaluar la ecuación escrita como texto
+//  en un valor de x específico.
+//  Ejemplo: evalF("x^2 - 4", 3)  →  devuelve 5
+// ─────────────────────────────────────────────────────────
+function evalF(expr, x) {
+  return math.evaluate(expr, { x });
+}
+
+
+// ─────────────────────────────────────────────────────────
+//  derivada(expr, x)
+//  Calcula una aproximación de f'(x) usando diferencia centrada:
+//  f'(x) ≈ [ f(x+h) - f(x-h) ] / (2h)
+//  h = 0.0000001 es suficientemente pequeño para ser preciso.
+// ─────────────────────────────────────────────────────────
+function derivada(expr, x) {
+  const h = 1e-7;
+  return (evalF(expr, x + h) - evalF(expr, x - h)) / (2 * h);
+}
+
+
+// ─────────────────────────────────────────────────────────
+//  mostrarError(msg)
+//  Muestra un mensaje de error en pantalla y oculta resultados.
+// ─────────────────────────────────────────────────────────
+function mostrarError(msg) {
+  const box = document.getElementById('error-box');
+  box.textContent = '⚠ ' + msg;
+  box.style.display = 'block';
+  document.getElementById('results').style.display = 'none';
+}
+
+
+// ─────────────────────────────────────────────────────────
+//  calcular()
+//  Punto de entrada: lee el formulario, valida la ecuación
+//  y llama al método que corresponde.
+// ─────────────────────────────────────────────────────────
+function calcular() {
+  document.getElementById('error-box').style.display = 'none';
+
+  const expr    = document.getElementById('ecuacion').value.trim();
+  const maxIter = parseInt(document.getElementById('iteraciones').value);
+
+  // Validar que la ecuación se pueda evaluar
+  try {
+    evalF(expr, 0);
+  } catch(e) {
+    return mostrarError('Ecuación inválida. Revisa la sintaxis. Ejemplo: x^3 - x - 2');
+  }
+
+  // Llamar al algoritmo correspondiente
+  if (metodo === 'biseccion') {
+    calcularBiseccion(expr, maxIter);
+  } else {
+    calcularNewton(expr, maxIter);
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────
+//  calcularBiseccion(expr, maxIter)
+//  Implementa el método de bisección.
+//  Requiere un intervalo [a, b] donde f(a) y f(b) tengan
+//  signos opuestos (Teorema de Bolzano).
+// ─────────────────────────────────────────────────────────
+function calcularBiseccion(expr, maxIter) {
+  let a = parseFloat(document.getElementById('param-a').value);
+  let b = parseFloat(document.getElementById('param-b').value);
+
+  // Validaciones básicas
+  if (isNaN(a) || isNaN(b)) return mostrarError('Ingresa valores numéricos para a y b.');
+  if (a >= b)               return mostrarError('El valor a debe ser menor que b.');
+
+  const fa = evalF(expr, a);
+  const fb = evalF(expr, b);
+
+  // Verificar cambio de signo (condición de Bolzano)
+  if (fa * fb > 0) return mostrarError(
+    `f(a)=${fa.toFixed(4)} y f(b)=${fb.toFixed(4)} tienen el mismo signo. No se garantiza raíz en [${a}, ${b}].`
+  );
+
+  const filas = [];
+  let raiz, fRaiz;
+
+  for (let i = 1; i <= maxIter; i++) {
+    // FÓRMULA PRINCIPAL: punto medio del intervalo
+    const c     = (a + b) / 2;
+    const fc    = evalF(expr, c);
+    const error = (b - a) / 2;  // El error es la mitad del intervalo actual
+
+    // Guardar los datos de esta iteración para la tabla
+    filas.push({ iter: i, a, b, c, fa: evalF(expr, a), fb: evalF(expr, b), fc, error });
+
+    raiz  = c;
+    fRaiz = fc;
+
+    // Criterio de parada: f(c) ≈ 0 o intervalo muy pequeño
+    if (Math.abs(fc) < 1e-10 || error < 1e-10) { filas[filas.length-1].ultimo = true; break; }
+
+    // Actualizar intervalo: conservar la mitad que contiene la raíz
+    if (fa * fc < 0) { b = c; }  // Raíz en [a, c]
+    else             { a = c; }  // Raíz en [c, b]
+
+    if (i === maxIter) filas[filas.length-1].ultimo = true;
+  }
+
+  mostrarResultados({
+    metodo: 'Bisección',
+    raiz,
+    fRaiz,
+    iteraciones: filas.length,
+    columnas: ['Iter', 'a', 'b', 'c = (a+b)/2', 'f(a)', 'f(b)', 'f(c)', 'Error'],
+    filas: filas.map(f => [
+      f.iter,
+      f.a.toFixed(6),
+      f.b.toFixed(6),
+      f.c.toFixed(6),
+      f.fa.toFixed(6),
+      f.fb.toFixed(6),
+      f.fc.toFixed(6),
+      f.error.toExponential(3)
+    ]),
+    ultimaFila: filas.length - 1
+  });
+}
+
+
+// ─────────────────────────────────────────────────────────
+//  calcularNewton(expr, maxIter)
+//  Implementa el método de Newton-Raphson.
+//  Parte de un punto x₀ y usa la derivada para converger.
+//  Fórmula: x(n+1) = x(n) - f(x(n)) / f'(x(n))
+// ─────────────────────────────────────────────────────────
+function calcularNewton(expr, maxIter) {
+  let x = parseFloat(document.getElementById('param-x0').value);
+
+  if (isNaN(x)) return mostrarError('Ingresa un valor numérico para x₀.');
+
+  const filas = [];
+  let raiz, fRaiz;
+
+  for (let i = 1; i <= maxIter; i++) {
+    const fx  = evalF(expr, x);    // Valor de f en el punto actual
+    const fpx = derivada(expr, x); // Valor de f' en el punto actual
+
+    // Si la derivada es cero no se puede dividir
+    if (Math.abs(fpx) < 1e-14)
+      return mostrarError(`f'(x) ≈ 0 en x=${x.toFixed(6)}. Newton-Raphson no puede continuar (división por cero).`);
+
+    // FÓRMULA PRINCIPAL de Newton-Raphson
+    const xNuevo = x - fx / fpx;
+    const error  = Math.abs(xNuevo - x);  // Diferencia entre iteraciones
+
+    // Guardar los datos de esta iteración para la tabla
+    filas.push({ iter: i, x, fx, fpx, xNuevo, error });
+
+    raiz  = xNuevo;
+    fRaiz = evalF(expr, xNuevo);
+    x     = xNuevo;  // El nuevo x es el punto de partida de la siguiente iteración
+
+    // Criterio de parada: cambio muy pequeño entre iteraciones
+    if (error < 1e-10) { filas[filas.length-1].ultimo = true; break; }
+    if (i === maxIter)   filas[filas.length-1].ultimo = true;
+  }
+
+  mostrarResultados({
+    metodo: 'Newton-Raphson',
+    raiz,
+    fRaiz,
+    iteraciones: filas.length,
+    columnas: ["Iter", "xn", "f(xn)", "f'(xn)", "xn+1 = xn - f/f'", "Error"],
+    filas: filas.map(f => [
+      f.iter,
+      f.x.toFixed(6),
+      f.fx.toFixed(6),
+      f.fpx.toFixed(6),
+      f.xNuevo.toFixed(6),
+      f.error.toExponential(3)
+    ]),
+    ultimaFila: filas.length - 1
+  });
+}
+
+
+// ─────────────────────────────────────────────────────────
+//  mostrarResultados(datos)
+//  Recibe todos los resultados y los dibuja en la pantalla:
+//  actualiza las tarjetas de resumen y construye la tabla HTML.
+// ─────────────────────────────────────────────────────────
+function mostrarResultados({ metodo, raiz, fRaiz, iteraciones, columnas, filas, ultimaFila }) {
+  // Actualizar tarjetas de resumen
+  document.getElementById('result-title').textContent = 'Resultados — ' + metodo;
+  document.getElementById('result-badge').textContent = iteraciones + ' iteraciones';
+  document.getElementById('s-raiz').textContent = raiz.toFixed(8);
+  document.getElementById('s-fval').textContent = Math.abs(fRaiz) < 1e-8 ? '≈ 0' : fRaiz.toFixed(8);
+  document.getElementById('s-iter').textContent = iteraciones;
+
+  // Construir encabezado de la tabla
+  const head = document.getElementById('tabla-head');
+  head.innerHTML = '<tr>' + columnas.map(c => `<th>${c}</th>`).join('') + '</tr>';
+
+  // Construir filas de la tabla
+  const body = document.getElementById('tabla-body');
+  body.innerHTML = filas.map((fila, idx) =>
+    `<tr class="${idx === ultimaFila ? 'row-highlight' : ''}">` +
+    fila.map((celda, ci) => {
+      const cls = (idx === ultimaFila && ci === fila.length - 1) ? 'converge' : '';
+      return `<td class="${cls}">${celda}</td>`;
+    }).join('') +
+    '</tr>'
+  ).join('');
+
+  // Hacer visible la sección de resultados y hacer scroll
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+</script>
+</body>
+</html>
